@@ -1,0 +1,104 @@
+cat <<'EOF' > setup.sh
+#!/bin/bash
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+echo "=== START: $(date) ==="
+
+# --- Phase 0: Basics ---
+apt update && apt upgrade -y
+apt install -y sudo tmux
+
+# --- Phase 1: Python build & essentials ---
+sudo apt update && sudo apt install -y \
+  python3 python3-venv python3-pip curl wget screen git lsof nano unzip iproute2 \
+  build-essential gcc g++ libssl-dev zlib1g-dev libffi-dev libsqlite3-dev \
+  libreadline-dev libbz2-dev liblzma-dev tk-dev
+
+# Build Python 3.10.14 if not present
+if ! command -v python3.10 >/dev/null 2>&1; then
+  wget -q https://www.python.org/ftp/python/3.10.14/Python-3.10.14.tgz
+  tar -xf Python-3.10.14.tgz
+  cd Python-3.10.14
+  ./configure --enable-optimizations
+  make -j"$(nproc)"
+  sudo make altinstall
+  cd ..
+  rm -rf Python-3.10.14 Python-3.10.14.tgz
+fi
+python3.10 -V
+
+# --- CUDA script ---
+[ -f cuda.sh ] && rm cuda.sh
+curl -fsSL -o cuda.sh https://raw.githubusercontent.com/zunxbt/gensyn-testnet/main/cuda.sh
+chmod +x cuda.sh
+. ./cuda.sh || true
+
+# --- Phase 2: Node + Yarn ---
+sudo apt update
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
+echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
+sudo apt update && sudo apt install -y yarn
+
+# --- Phase 3: Extra Node setup ---
+apt update && apt install -y curl
+curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+apt install -y nodejs
+node -v
+npm -v
+yarn -v
+
+# --- Phase 4: RL-Swarm clone & setup ---
+mkdir -p /workspace
+cd /workspace
+if [ ! -d "rl-swarm" ]; then
+  git clone https://github.com/gensyn-ai/rl-swarm.git
+fi
+cd rl-swarm
+
+python3.10 -m venv ~/.venv310
+source ~/.venv310/bin/activate
+
+# --- NVM setup before Yarn ---
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.6/install.sh | bash
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+nvm install 20.18.0
+nvm alias default 20.18.0
+nvm use default
+node -v && npm -v
+
+# --- Modal-login setup ---
+cd modal-login
+yarn install
+yarn upgrade
+yarn add next@latest viem@latest
+cd ..
+
+git reset --hard || true
+git pull origin main || true
+git stash || true
+git pull || true
+
+cd /workspace/rl-swarm/modal-login
+sed -i "/import { Inter } from \"next\/font\/google\";/d;/const inter = Inter({ subsets: \[\"latin\"\] });/d;s/<body className={inter.className}>/<body>/" app/layout.tsx
+sed -i "1i @import \"@fontsource/inter/index.css\";\n\nhtml, body {\n  font-family: \"Inter\", system-ui, sans-serif;\n}\n" app/globals.css
+sed -i '1i import "@fontsource/inter/400.css";' /workspace/rl-swarm/modal-login/app/layout.tsx
+sed -i '2i import "@fontsource/inter/700.css";' /workspace/rl-swarm/modal-login/app/layout.tsx
+
+yarn add @fontsource/inter encoding pino-pretty
+
+cd /workspace/rl-swarm
+source ~/.venv310/bin/activate
+pip install --upgrade pip setuptools wheel
+pip config set global.index-url https://pypi.org/simple
+pip install gensyn-genrl==0.1.4 -i https://pypi.org/simple --trusted-host pypi.org
+
+echo "=== FINISHED $(date) ==="
+exec bash
+EOF
+
+chmod +x setup.sh
+./setup.sh

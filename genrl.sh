@@ -92,7 +92,6 @@ yarn add @fontsource/inter encoding pino-pretty
 
 cd /workspace/rl-swarm
 source ~/.venv310/bin/activate
-pip install --upgrade pip setuptools wheel
 pip config set global.index-url https://pypi.org/simple
 pip install gensyn-genrl==0.1.4 -i https://pypi.org/simple --trusted-host pypi.org
 

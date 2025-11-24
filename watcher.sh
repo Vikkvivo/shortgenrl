@@ -31,33 +31,12 @@ run_recovery() {
   python3.10 -m venv ~/.venv310 || true
   source ~/.venv310/bin/activate || true
 
-  # ---- NVM + NODE ----
-  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.6/install.sh | bash
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-  nvm install 20.18.0
-  nvm alias default 20.18.0
-  nvm use default
-
-  # ---- MODAL LOGIN PATCH ----
-  cd /workspace/rl-swarm/modal-login || true
-
-  sed -i "/import { Inter } from \"next\/font\/google\";/d;/const inter = Inter({ subsets: \[\"latin\"\] });/d;s/<body className={inter.className}>/<body>/" app/layout.tsx
-
-  sed -i "1i @import \"@fontsource/inter/index.css\";\n\nhtml, body {\n  font-family: \"Inter\", system-ui, sans-serif;\n}\n" app/globals.css
-
-  sed -i '1i import "@fontsource/inter/400.css";' app/layout.tsx
-  sed -i '2i import "@fontsource/inter/700.css";' app/layout.tsx
-
-  yarn add @fontsource/inter encoding pino-pretty || true
-
-  # ---- FINAL START ----
-  cd /workspace/rl-swarm/ || true
-  cp -i /workspace/login/{userApiKey.json,userData.json} /workspace/rl-swarm/modal-login/temp-data/ || true
-
   chmod +x /workspace/rl-swarm/start_rl.sh
   log "🚀 Running RL Swarm setup now..."
   bash /workspace/rl-swarm/start_rl.sh || true
+
+  # ---- FINAL START ----
+  cp -i /workspace/login/{userApiKey.json,userData.json} /workspace/rl-swarm/modal-login/temp-data/ || true
 
   date +%s > "$STATE_FILE"
 }
